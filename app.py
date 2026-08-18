@@ -5,116 +5,84 @@ from ultralytics import YOLO
 import pandas as pd
 
 
-# -----------------------------
-# Page configuration
-# -----------------------------
 st.set_page_config(
-    page_title="YOLO Object Counter",
+    page_title="YOLO Object Detector",
     page_icon="🔎",
     layout="wide"
 )
 
-st.title("🔎 YOLO Object Detection & Object Counter")
+st.title("🔎 YOLO Object Detection & Counter")
 
 st.write(
-    "Upload an image and the application will detect objects, "
-    "count each object type, and calculate percentages."
+    "Upload an image and YOLO will detect and count the objects."
 )
 
 
-# -----------------------------
-# Load YOLO model
-# -----------------------------
 @st.cache_resource
 def load_model():
-    model = YOLO("yolo11n.pt")
-    return model
+    return YOLO("yolo11n.pt")
 
 
 model = load_model()
 
 
-# -----------------------------
-# Upload image
-# -----------------------------
 uploaded_file = st.file_uploader(
-    "Upload an image",
+    "📷 Upload an image",
     type=["jpg", "jpeg", "png", "webp"]
 )
 
 
-# -----------------------------
-# Process image
-# -----------------------------
-if uploaded_file:
+if uploaded_file is not None:
 
-    # Open uploaded image
     image = Image.open(uploaded_file).convert("RGB")
 
-    st.subheader("Original Image")
+    st.subheader("📷 Original Image")
     st.image(image, use_container_width=True)
 
-    # -----------------------------
-    # Object detection
-    # -----------------------------
-    with st.spinner("Detecting objects..."):
+    with st.spinner("🤖 Detecting objects..."):
 
         results = model.predict(
-            image,
+            source=image,
             conf=0.25,
             verbose=False
         )
 
     result = results[0]
 
-    # -----------------------------
-    # Draw bounding boxes
-    # -----------------------------
-    annotated = result.plot()
+    # Image with bounding boxes
+    annotated_image = result.plot()
 
-    # Convert BGR to RGB
-    annotated_image = Image.fromarray(
-        annotated[..., ::-1]
-    )
+    # Convert BGR → RGB
+    annotated_image = annotated_image[:, :, ::-1]
 
-    st.subheader("Detected Objects")
+    st.subheader("🎯 Detected Objects")
     st.image(
         annotated_image,
         use_container_width=True
     )
 
-
-    # -----------------------------
-    # Get detected object names
-    # -----------------------------
-    names = result.names
-
+    # Get detected objects
     detected_objects = []
+
+    names = result.names
 
     if result.boxes is not None:
 
-        for cls in result.boxes.cls.tolist():
+        for box in result.boxes:
 
-            class_id = int(cls)
+            class_id = int(box.cls[0].item())
 
             object_name = names[class_id]
 
             detected_objects.append(object_name)
 
-
-    # -----------------------------
     # Count objects
-    # -----------------------------
     object_counts = Counter(detected_objects)
 
     total_objects = len(detected_objects)
 
     different_types = len(object_counts)
 
-
-    # -----------------------------
-    # Statistics
-    # -----------------------------
     st.divider()
 
     st.subheader("📊 Detection Summary")
@@ -136,25 +104,19 @@ if uploaded_file:
     with col3:
 
         if object_counts:
-
             most_common = object_counts.most_common(1)[0][0]
-
         else:
-
             most_common = "None"
 
         st.metric(
-            "Most Common Object",
+            "Most Common",
             most_common
         )
 
+    if total_objects > 0:
 
-    # -----------------------------
-    # Results table
-    # -----------------------------
-    if object_counts:
-
-        rows = []
+        # Create table
+        data = []
 
         for object_type, quantity in object_counts.most_common():
 
@@ -162,55 +124,41 @@ if uploaded_file:
                 quantity / total_objects
             ) * 100
 
-            rows.append({
+            data.append({
                 "Object Type": object_type,
                 "Quantity": quantity,
-                "Percentage": round(
-                    percentage,
-                    2
-                )
+                "Percentage": round(percentage, 2)
             })
 
-
-        dataframe = pd.DataFrame(rows)
-
+        df = pd.DataFrame(data)
 
         st.subheader("📋 Objects by Type")
 
         st.dataframe(
-            dataframe,
+            df,
             use_container_width=True,
             hide_index=True
         )
 
-
-        # -----------------------------
-        # Bar chart
-        # -----------------------------
+        # Chart
         st.subheader("📈 Object Distribution")
 
-        chart_data = dataframe.set_index(
+        chart = df.set_index(
             "Object Type"
         )["Quantity"]
 
-        st.bar_chart(chart_data)
+        st.bar_chart(chart)
 
-
-        # -----------------------------
         # Calculations
-        # -----------------------------
         st.subheader("🧮 Calculations")
 
         st.write(
-            f"**Total detected objects:** "
-            f"{total_objects}"
+            f"Total objects detected: **{total_objects}**"
         )
 
         st.write(
-            f"**Different object types:** "
-            f"{different_types}"
+            f"Different object types: **{different_types}**"
         )
-
 
         for object_type, quantity in object_counts.most_common():
 
@@ -219,15 +167,19 @@ if uploaded_file:
             ) * 100
 
             st.write(
-                f"**{object_type}**: "
+                f"**{object_type}** = "
                 f"{quantity} object(s) "
-                f"({percentage:.2f}%)"
+                f"→ {percentage:.2f}%"
             )
-
 
     else:
 
         st.warning(
-            "No objects were detected. "
-            "Try another image."
+            "⚠️ No objects were detected."
         )
+
+else:
+
+    st.info(
+        "👆 Upload an image to start."
+    )
